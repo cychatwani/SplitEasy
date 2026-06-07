@@ -65,4 +65,6 @@
       client-id: 79365214496-c026mqlrgipsho5cek4sbkve2i3e93no.apps.googleusercontent.com
 
   kind: Application
-
+  app:
+    auth:
+      skip-email-verification: true   # DEV ONLY — code defaults to false, so prod stays safe

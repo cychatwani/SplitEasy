@@ -5,9 +5,11 @@ import com.splitEasy.core.dto.requests.auth.BasePasswordRegisterRequest;
 import com.splitEasy.core.dto.response.Auth.RegisterResponseDTO;
 import com.splitEasy.core.entity.User;
 import com.splitEasy.core.exception.auth.PasswordPolicyViolationException;
+import com.splitEasy.core.repository.UserRepository;
 import com.splitEasy.core.security.JwtService;
 import com.splitEasy.core.security.PasswordPolicy;
 import com.splitEasy.core.services.notification.NotificationService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -21,18 +23,25 @@ public class PasswordRegistrationService {
     private final PasswordPolicy passwordPolicy;
     private final JwtService jwtService;
     private final NotificationService notificationService;
+    private final UserRepository userRepository;
     private final List<PasswordUserRegistrationHandler<? extends BasePasswordRegisterRequest>> handlers;
+
+    private final boolean skipEmailVerification;
 
     public PasswordRegistrationService(PasswordEncoder passwordEncoder,
                                        PasswordPolicy passwordPolicy,
                                        JwtService jwtService,
                                        NotificationService notificationService,
-                                       List<PasswordUserRegistrationHandler<? extends BasePasswordRegisterRequest>> handlers) {
+                                       UserRepository userRepository,
+                                       List<PasswordUserRegistrationHandler<? extends BasePasswordRegisterRequest>> handlers,
+                                       @Value("${app.auth.skip-email-verification:false}") boolean skipEmailVerification) {
         this.passwordEncoder = passwordEncoder;
         this.passwordPolicy = passwordPolicy;
         this.jwtService = jwtService;
         this.notificationService = notificationService;
+        this.userRepository = userRepository;
         this.handlers = handlers;
+        this.skipEmailVerification = skipEmailVerification;
     }
 
     @SuppressWarnings("unchecked")
@@ -53,21 +62,28 @@ public class PasswordRegistrationService {
         String hash = passwordEncoder.encode(request.getPassword());
         User user = handler.createUser(request, hash);
 
-        String verificationToken = jwtService.generateEmailVerificationToken(user.getPublicId());
+        if (skipEmailVerification) {
+            user.setEmailVerified(true);
+            userRepository.save(user);
+        } else {
+            String verificationToken = jwtService.generateEmailVerificationToken(user.getPublicId());
 
-        notificationService.send(
-                "EMAIL_VERIFICATION",
-                "EMAIL",
-                email,
-                Map.of(
-                        "firstName", user.getFirstName(),
-                        "link", verificationToken
-                )
-        );
+            notificationService.send(
+                    "EMAIL_VERIFICATION",
+                    "EMAIL",
+                    email,
+                    Map.of(
+                            "firstName", user.getFirstName(),
+                            "link", verificationToken
+                    )
+            );
+        }
 
         return RegisterResponseDTO.builder()
                 .email(email)
-                .message("Verification email sent. Please check your inbox.")
+                .message(skipEmailVerification
+                        ? "User registered and auto-verified (dev mode)."
+                        : "Verification email sent. Please check your inbox.")
                 .build();
     }
 }

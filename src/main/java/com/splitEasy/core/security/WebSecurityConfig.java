@@ -26,6 +26,7 @@ public class WebSecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/currencies").permitAll()
+                        .requestMatchers("/v3/api-docs/**", "/v3/api-docs.yaml").permitAll()   // <-- add
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
